@@ -44,7 +44,7 @@ amd_df <- amd_df[, c("date", "close")]
 #### Plotting the Data
 Plot the closing prices over time to visualize the price movement.
 ```r
-plot(amd_df$date, amd_df$close,'l')
+plot(xlab = 'Date', ylab = 'Close Price', main = 'AMD Stock Closing Prices Over Time', amd_df$date, amd_df$close,'l')
 ```
 
 ### Step 2: Trading Algorithm
@@ -69,17 +69,45 @@ amd_df$accumulated_shares <- 0  # Initialize if needed for tracking
 previous_price <- 0
 share_size <- 100
 accumulated_shares <- 0
+avg_purchase_price <- 0
 
 for (i in 1:nrow(amd_df)) {
-# Fill your code here
+    if (previous_price == 0) {     # If previous price = 0
+        amd_df[i, "trade_type"] <- "buy"
+        amd_df[i, "costs_proceeds"] <- -amd_df[i, "close"] * share_size
+        accumulated_shares <- 100    
+    } else if (amd_df[i, "close"] < previous_price) {    # If price of the current day is less than that of the previous day
+        amd_df[i, "trade_type"] <- "buy"
+        amd_df[i, "costs_proceeds"] <- -amd_df[i, "close"] * share_size
+        accumulated_shares <- accumulated_shares + share_size
+    } else if (i == nrow(amd_df)) {    # Last day of trading
+        amd_df[i, "trade_type"] <- "sell"
+        amd_df[i, "costs_proceeds"] <- accumulated_shares * amd_df[i, "close"]
+        break
+    } 
+    previous_price <- amd_df[i, "close"]
+    amd_df[i, "accumulated_shares"] = accumulated_shares
 }
+print(amd_df)
 ```
 
 
 ### Step 3: Customize Trading Period
 - Define a trading period you wanted in the past five years 
 ```r
-# Fill your code here
+
+# Chosen Trading Period of 2022
+start_date <- as.Date('2022-01-03')
+end_date <- as.Date('2022-12-30')
+
+
+restricted_df <- subset(amd_df, date >= start_date & date <= end_date)
+rownames(restricted_df) <- NULL
+restricted_df$trade_type <- NA
+restricted_df$costs_proceeds <- NA
+restricted_df$accumulated_shares <- 0
+
+plot(restricted_df$date, restricted_df$close, type = 'l', xlab = 'Date', ylab = 'Close Price', main = 'AMD Stock Closing Prices Over Time')
 ```
 
 
@@ -91,7 +119,53 @@ After running your algorithm, check if the trades were executed as expected. Cal
 - ROI Formula: $$\text{ROI} = \left( \frac{\text{Total Profit or Loss}}{\text{Total Capital Invested}} \right) \times 100$$
 
 ```r
-# Fill your code here
+restricted_df$trade_type <- NA
+restricted_df$costs_proceeds <- NA
+restricted_df$accumulated_shares <- 0 
+
+previous_price <- 0
+share_size <- 100
+accumulated_shares <- 0
+
+for (i in 1:nrow(restricted_df)) {
+    # If previous price = 0
+    if (previous_price == 0) {
+        restricted_df[i, "trade_type"] <- "buy"
+        restricted_df[i, "costs_proceeds"] <- -restricted_df[i, "close"] * share_size
+        accumulated_shares <- 100    
+    # If price of the current day is less than that of the previous day
+    } else if (restricted_df[i, "close"] < previous_price) {
+        restricted_df[i, "trade_type"] <- "buy"
+        restricted_df[i, "costs_proceeds"] <- -restricted_df[i, "close"] * share_size
+        accumulated_shares <- accumulated_shares + share_size
+    } 
+    # Last day of trading
+    if (i == nrow(restricted_df)) {
+        restricted_df[i, "trade_type"] <- "sell"
+        restricted_df[i, "costs_proceeds"] <- accumulated_shares * restricted_df[i, "close"]
+        accumulated_shares <- 0
+    } 
+    previous_price <- restricted_df[i, "close"]
+    restricted_df[i, "accumulated_shares"] <- accumulated_shares
+}
+
+# Total Profit/Loss Calculation
+profit_loss <- sum(restricted_df$costs_proceeds, na.rm = TRUE)
+print(restricted_df)
+cat("Total Profit/Loss:", profit_loss, "\n")
+
+# Invested Capital
+capital <- 0 
+for (i in 1:nrow(restricted_df)) {
+    if (restricted_df[i, "trade_type"] == "buy" && !is.na(restricted_df[i, "trade_type"])) {
+        capital <- capital + restricted_df[i, "costs_proceeds"]
+    }
+}
+capital <- -capital
+cat("Invested Capital:", capital, "\n")
+
+# Return On Investment
+cat("Return on Investment (ROI) (%):", profit_loss / capital * 100, "\n")
 ```
 
 ### Step 5: Profit-Taking Strategy or Stop-Loss Mechanisum (Choose 1)
@@ -100,7 +174,45 @@ After running your algorithm, check if the trades were executed as expected. Cal
 
 
 ```r
-# Fill your code here
+# Stop-Loss Mechanism Implementation
+# Activates if the stock falls by 30% from the average purchase price
+total_cost <- 0 # Total cost of shares purchased
+stop_loss <- 0.7 # When stock falls 30% from the average purchase price
+accumulated_shares <- 0
+
+for (i in 1:nrow(restricted_df)) {
+  if (accumulated_shares > 0) {
+    avg_purchase_price <- total_cost / accumulated_shares
+  } 
+  
+  if (restricted_df[i, "close"] < (stop_loss * avg_purchase_price)) {    # If Stop-Loss mechanism activates, set trade_type to "sell"
+    restricted_df[i, "trade_type"] <- "sell"
+    shares_to_sell <- accumulated_shares / 2
+    restricted_df[i, "costs_proceeds"] <- -restricted_df[i, "close"] * shares_to_sell
+    accumulated_shares <- accumulated_shares - shares_to_sell
+    total_cost <- total_cost - shares_to_sell * avg_purchase_price
+  } else if (previous_price == 0) {    # If previous price = 0, set trade_type to "buy"
+      restricted_df[i, "trade_type"] <- "buy"
+      restricted_df[i, "costs_proceeds"] <- -restricted_df[i, "close"] * share_size
+      accumulated_shares <- 100  
+      total_cost <- total_cost - restricted_df[i, "costs_proceeds"]
+  } else if (restricted_df[i, "close"] < previous_price) {    # If price of the current day is less than that of the previous day, set trade_type to "buy"
+      restricted_df[i, "trade_type"] <- "buy"
+      restricted_df[i, "costs_proceeds"] <- -restricted_df[i, "close"] * share_size
+      accumulated_shares <- accumulated_shares + share_size
+      total_cost <- total_cost - restricted_df[i, "costs_proceeds"]
+  } 
+  
+  if (i == nrow(restricted_df)) {    # Last day of trading
+      restricted_df[i, "trade_type"] <- "sell"
+      restricted_df[i, "costs_proceeds"] <- accumulated_shares * restricted_df[i, "close"]
+      accumulated_shares <- 0
+  } 
+    previous_price <- restricted_df[i, "close"]
+    restricted_df[i, "accumulated_shares"] <- accumulated_shares
+}
+
+print(restricted_df)
 ```
 
 
@@ -110,10 +222,70 @@ After running your algorithm, check if the trades were executed as expected. Cal
 
 
 ```r
-# Fill your code here and Disucss
+# For the 2022 trading period when the Stop-Loss mechanism is activated
+for (i in 1:nrow(restricted_df)) {
+  if (accumulated_shares > 0) {
+    avg_purchase_price <- total_cost / accumulated_shares
+  } 
+  
+  if (restricted_df[i, "close"] < (stop_loss * avg_purchase_price)) {    # If Stop-Loss mechanism activates, set trade_type to "sell"
+    restricted_df[i, "trade_type"] <- "sell"
+    shares_to_sell <- accumulated_shares / 2
+    restricted_df[i, "costs_proceeds"] <- -restricted_df[i, "close"] * shares_to_sell
+    accumulated_shares <- accumulated_shares - shares_to_sell
+    total_cost <- total_cost - shares_to_sell * avg_purchase_price
+  } else if (previous_price == 0) {    # If previous price = 0, set trade_type to "buy"
+      restricted_df[i, "trade_type"] <- "buy"
+      restricted_df[i, "costs_proceeds"] <- -restricted_df[i, "close"] * share_size
+      accumulated_shares <- 100  
+      total_cost <- total_cost - restricted_df[i, "costs_proceeds"]
+  } else if (restricted_df[i, "close"] < previous_price) {    # If price of the current day is less than that of the previous day, set trade_type to "buy"
+      restricted_df[i, "trade_type"] <- "buy"
+      restricted_df[i, "costs_proceeds"] <- -restricted_df[i, "close"] * share_size
+      accumulated_shares <- accumulated_shares + share_size
+      total_cost <- total_cost - restricted_df[i, "costs_proceeds"]
+  } 
+  
+  if (i == nrow(restricted_df)) {    # Last day of trading
+      restricted_df[i, "trade_type"] <- "sell"
+      restricted_df[i, "costs_proceeds"] <- accumulated_shares * restricted_df[i, "close"]
+      accumulated_shares <- 0
+  } 
+    previous_price <- restricted_df[i, "close"]
+    restricted_df[i, "accumulated_shares"] <- accumulated_shares
+}
+
+# Initial Profit/Loss at the start of the trading period
+initial_PL <- restricted_df$costs_proceeds[1]
+cat("Initial Profit/Loss:", initial_PL, "\n")
+
+# Total Profit/Loss Calculation
+profit_loss <- sum(restricted_df$costs_proceeds, na.rm = TRUE)
+print(restricted_df)
+
+cat("Total Profit/Loss:", profit_loss, "\n")
+
+# Invested Capital
+capital <- 0 
+for (i in 1:nrow(restricted_df)) {
+    if (restricted_df[i, "trade_type"] == "buy" && !is.na(restricted_df[i, "trade_type"])) {
+        capital <- capital + restricted_df[i, "costs_proceeds"]
+    }
+}
+capital <- -capital
+
+# Return On Investment
+cat("Return on Investment (ROI) (%):", profit_loss / capital * 100, "\n")
 ```
 
-Sample Discussion: On Wednesday, December 6, 2023, AMD CEO Lisa Su discussed a new graphics processor designed for AI servers, with Microsoft and Meta as committed users. The rise in AMD shares on the following Thursday suggests that investors believe in the chipmaker's upward potential and market expectations; My first strategy earned X dollars more than second strategy on this day, therefore providing a better ROI.
+
+During the 2022 period, AMD experienced a significant decline in both Profit/Loss and Return on Investment (ROI), with figures falling to -\$1, 656, 584 and -148.7304%, respectively. This was driven by macroeconomic factors such as inflation and geopolitical tensions. The Reserve Bank of Australia (RBA) reported that inflation increased to 7.8% in December from 3.5% the previous year, largely due to rising interest rates during the global pandemic, supply chain disruptions and increased demand for goods and services.
+
+Disruptions in the supply chain and global conflicts, such as the Russia-Ukraine war and the collapse of Brazil’s coal mines, significantly raised the costs of electricity and production inputs. The geopolitical tensions following the Russian invasion resulted in many countries turning to other economies, like Saudi Arabia, for oil and fuel. As a result, in 2022, fuel prices rose by 35% throughout the year, contributing to cost-push inflationary pressures as firms sought to preserve profit margins by passing these increased costs onto consumers.
+
+For AMD, higher fuel and oil prices increased costs of production and transportation of the manufacturing of semiconductor devices used in computer processors. This increased operational costs, combined with reduced consumer purchasing power, deteriorated investor confidence, as evident by the drastic drop in AMD's share price from \$150.24 to \$64.77 by year-end.
+
+Hence, for AMD, these economic factors resulted in the drop in share price, worsening total profit/loss and ROI as the company was forced to sell half its holdings when the Stop-Loss mechanism was activated, leading to an unfavourable financial position.
 
 
 
