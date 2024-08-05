@@ -81,7 +81,13 @@ $$
 $$
 
 ```r
-#fill the code
+# Calculate the daily returns for AMD and the S&P 500
+AMD_Return <- (df$AMD - lag(df$AMD, 1)) / lag(df$AMD, 1)
+GSPC_Return <- (df$GSPC - lag(df$GSPC, 1)) / lag(df$GSPC, 1)
+
+# Add the daily return values as new columns of the dataframe 'df'
+df$AMD_Return <- AMD_Return
+df$GSPC_Return <- GSPC_Return
 ```
 
 - **Calculate Risk-Free Rate**: Calculate the daily risk-free rate by conversion of annual risk-free Rate. This conversion accounts for the compounding effect over the days of the year and is calculated using the formula:
@@ -91,21 +97,24 @@ $$
 $$
 
 ```r
-#fill the code
+df$Daily_RF <- (1 + df$RF / 100)^(1 / 360) - 1
 ```
 
 
 - **Calculate Excess Returns**: Compute the excess returns for AMD and the S&P 500 by subtracting the daily risk-free rate from their respective returns.
 
 ```r
-#fill the code
+# Create new columns in the dataframe for the excess returns
+df$Excess_AMD_Returns <- df$AMD_Return - df$Daily_RF
+df$Excess_GSPC_Returns <- df$GSPC_Return - df$Daily_RF
 ```
 
 
 - **Perform Regression Analysis**: Using linear regression, we estimate the beta (\(\beta\)) of AMD relative to the S&P 500. Here, the dependent variable is the excess return of AMD, and the independent variable is the excess return of the S&P 500. Beta measures the sensitivity of the stock's returns to fluctuations in the market.
 
 ```r
-#fill the code
+model <- lm(Excess_AMD_Returns ~ Excess_GSPC_Returns, data = df)
+summary(model)
 ```
 
 
@@ -114,13 +123,19 @@ $$
 What is your \(\beta\)? Is AMD more volatile or less volatile than the market?
 
 **Answer:**
-
+From the analysis above, the $\beta$ value of AMD relative to the S&P 500 is the coefficient of the regression line and measures the sensitivity of the stock's returns to fluctuations in the market. The beta value of 1.5699987 indicates that AMD is more volatile than the market as it is greater than a value of 1. This suggests that AMD is expected to move 1.5699987 times as much as the market and indicates that AMD shares are more risky but are also likely to give more rewards.
 
 #### Plotting the CAPM Line
 Plot the scatter plot of AMD vs. S&P 500 excess returns and add the CAPM regression line.
 
 ```r
-#fill the code
+ggplot(df, aes(x = Excess_GSPC_Returns, y = Excess_AMD_Returns)) +
+  geom_point() +
+  geom_smooth(method = "lm", col = "blue") +
+  labs(title = "Relationship between AMD and S&P Excess Returns",
+       x = "Excess Returns of S&P", 
+       y = "Excess Returns of AMD") + 
+         theme(plot.title = element_text(hjust = 0.5, size = 14, face = "bold")) 
 ```
 
 ### Step 3: Predictions Interval
@@ -131,5 +146,40 @@ Suppose the current risk-free rate is 5.0%, and the annual expected return for t
 **Answer:**
 
 ```r
-#fill the code
+# Calculate the number of observations in the Excess_GSPC_Returns column
+n <- length(na.omit(df$'Excess_GSPC_Returns'))                
+RF_rate <- 0.05     # Given Risk-free rate 
+annual_expected_return <- 0.133
+daily_excess_return <- (annual_expected_return - RF_rate) / 252
+
+# Calculate the mean of 'Excess_GSPC_Returns 
+mean <- mean(df$'Excess_GSPC_Returns', na.rm = TRUE)
+
+# Calculate the sum of squared differences between 'Excess_AMD_Returns' and the mean
+SST <- sum((df$'Excess_AMD_Returns' - mean)^2, na.rm = TRUE)
+
+# Calculate the standard error of the residuals with (n-2) degrees of freedom
+se <- sqrt((sum((residuals(model))^2))/(n-2))
+
+# Calculate the standard error of the forecast, accounting for the prediction interval
+se_forecast <- se * sqrt((1 + (1/n) + (daily_excess_return - mean)^2 / SST))
+
+# Annualise the standard error of the forecast
+se_forecast <- se_forecast * sqrt(252)
+
+# Set the alpha (significance level) to 10%
+alpha <- 0.10  
+
+# Calculate the critical t-value with (n-2) degrees of freedom
+t_value <- qt(1 - alpha/2, df = n - 2)
+
+# Calculate the expected return using the CAPM
+capm_return <- 0.05 + 1.5699987 * (annual_expected_return - RF_rate)
+
+# Calculate the lower and upper bound of the confidence interval for the CAPM return
+lower_bound <- capm_return - t_value * se_forecast
+upper_bound <- capm_return + t_value * se_forecast
+
+print(lower_bound)
+print(upper_bound)
 ```
